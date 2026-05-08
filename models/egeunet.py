@@ -50,9 +50,10 @@ class group_aggregation_bridge(nn.Module):
         self.use_uncertainty_guide = use_uncertainty_guide
         self.pre_project = nn.Conv2d(dim_xh, dim_xl, 1)
         group_size = dim_xl // 2
+        chunk_channels = dim_xl // 4
         guide_channels = 2 if use_uncertainty_guide else 1
         group_input_channels = group_size + guide_channels
-        self.guide_proj = nn.Conv2d(guide_channels, group_size, 1)
+        self.guide_proj = nn.Conv2d(guide_channels, chunk_channels, 1)
         self.g0 = nn.Sequential(
             LayerNorm(normalized_shape=group_input_channels, data_format='channels_first'),
             nn.Conv2d(group_input_channels, group_input_channels, kernel_size=3, stride=1, 
