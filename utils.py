@@ -298,16 +298,50 @@ class BceDiceLoss(nn.Module):
         return loss
     
 
+def mask_to_boundary(mask, dilation_ratio=0.02):
+    h, w = mask.shape[-2:]
+    kernel_size = max(3, int(round(dilation_ratio * max(h, w))))
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    pad = kernel_size // 2
+    dilated = F.max_pool2d(mask, kernel_size=kernel_size, stride=1, padding=pad)
+    eroded = 1 - F.max_pool2d(1 - mask, kernel_size=kernel_size, stride=1, padding=pad)
+    boundary = torch.clamp(dilated - eroded, min=0.0, max=1.0)
+    return boundary
+
+
 class GT_BceDiceLoss(nn.Module):
     def __init__(self, wb=1, wd=1):
         super(GT_BceDiceLoss, self).__init__()
         self.bcedice = BceDiceLoss(wb, wd)
 
-    def forward(self, gt_pre, out, target):
+    def forward(self, preds, target):
+        gt_pre = preds.get('gt_pre')
+        out = preds['out']
         bcediceloss = self.bcedice(out, target)
-        gt_pre5, gt_pre4, gt_pre3, gt_pre2, gt_pre1 = gt_pre
-        gt_loss = self.bcedice(gt_pre5, target) * 0.1 + self.bcedice(gt_pre4, target) * 0.2 + self.bcedice(gt_pre3, target) * 0.3 + self.bcedice(gt_pre2, target) * 0.4 + self.bcedice(gt_pre1, target) * 0.5
+        gt_loss = 0.0
+        if gt_pre is not None:
+            gt_pre5, gt_pre4, gt_pre3, gt_pre2, gt_pre1 = gt_pre
+            gt_loss = self.bcedice(gt_pre5, target) * 0.1 + self.bcedice(gt_pre4, target) * 0.2 + self.bcedice(gt_pre3, target) * 0.3 + self.bcedice(gt_pre2, target) * 0.4 + self.bcedice(gt_pre1, target) * 0.5
         return bcediceloss + gt_loss
+
+
+class EdgeAwareLoss(nn.Module):
+    def __init__(self, wb=1, wd=1, lambda_edge=0.3, dilation_ratio=0.02):
+        super(EdgeAwareLoss, self).__init__()
+        self.seg_loss = GT_BceDiceLoss(wb, wd)
+        self.edge_loss = BceDiceLoss(wb, wd)
+        self.lambda_edge = lambda_edge
+        self.dilation_ratio = dilation_ratio
+
+    def forward(self, preds, target):
+        seg_loss = self.seg_loss(preds, target)
+        edge_pred = preds.get('edge')
+        if edge_pred is None:
+            return seg_loss
+        edge_target = mask_to_boundary(target, dilation_ratio=self.dilation_ratio)
+        edge_loss = self.edge_loss(edge_pred, edge_target)
+        return seg_loss + self.lambda_edge * edge_loss
 
 
 

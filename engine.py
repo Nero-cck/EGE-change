@@ -6,6 +6,15 @@ from sklearn.metrics import confusion_matrix
 from utils import save_imgs
 
 
+def _unwrap_outputs(outputs):
+    if isinstance(outputs, dict):
+        return outputs
+    if isinstance(outputs, tuple):
+        gt_pre, out = outputs
+        return {'gt_pre': gt_pre, 'out': out}
+    return {'out': outputs}
+
+
 def train_one_epoch(train_loader,
                     model,
                     criterion, 
@@ -30,8 +39,8 @@ def train_one_epoch(train_loader,
         images, targets = data
         images, targets = images.cuda(non_blocking=True).float(), targets.cuda(non_blocking=True).float()
 
-        gt_pre, out = model(images)
-        loss = criterion(gt_pre, out, targets)
+        preds = _unwrap_outputs(model(images))
+        loss = criterion(preds, targets)
 
         loss.backward()
         optimizer.step()
@@ -66,13 +75,12 @@ def val_one_epoch(test_loader,
             img, msk = data
             img, msk = img.cuda(non_blocking=True).float(), msk.cuda(non_blocking=True).float()
 
-            gt_pre, out = model(img)
-            loss = criterion(gt_pre, out, msk)
+            preds_dict = _unwrap_outputs(model(img))
+            loss = criterion(preds_dict, msk)
 
             loss_list.append(loss.item())
             gts.append(msk.squeeze(1).cpu().detach().numpy())
-            if type(out) is tuple:
-                out = out[0]
+            out = preds_dict['out']
             out = out.squeeze(1).cpu().detach().numpy()
             preds.append(out) 
 
@@ -121,14 +129,13 @@ def test_one_epoch(test_loader,
             img, msk = data
             img, msk = img.cuda(non_blocking=True).float(), msk.cuda(non_blocking=True).float()
 
-            gt_pre, out = model(img)
-            loss = criterion(gt_pre, out, msk)
+            preds_dict = _unwrap_outputs(model(img))
+            loss = criterion(preds_dict, msk)
 
             loss_list.append(loss.item())
             msk = msk.squeeze(1).cpu().detach().numpy()
             gts.append(msk)
-            if type(out) is tuple:
-                out = out[0]
+            out = preds_dict['out']
             out = out.squeeze(1).cpu().detach().numpy()
             preds.append(out) 
             if i % config.save_interval == 0:

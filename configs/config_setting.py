@@ -15,7 +15,8 @@ class setting_config:
         'c_list': [8,16,24,32,48,64], 
         'bridge': True,
         'gt_ds': True,
-        'use_uncertainty_guide': True,
+        'use_uncertainty_guide': False,
+        'use_boundary_head': True,
     }
 
     datasets = 'isic17' 
@@ -26,7 +27,9 @@ class setting_config:
     else:
         raise Exception('datasets in not right!')
 
-    criterion = GT_BceDiceLoss(wb=1, wd=1)
+    use_edge_loss = model_config['use_boundary_head']
+    lambda_edge = 0.3
+    criterion = EdgeAwareLoss(wb=1, wd=1, lambda_edge=lambda_edge) if use_edge_loss else GT_BceDiceLoss(wb=1, wd=1)
 
     pretrained_path = './pre_trained/'
     num_classes = 1
@@ -44,7 +47,12 @@ class setting_config:
     batch_size = 8
     epochs = 300
 
-    exp_name = 'ug' if model_config['use_uncertainty_guide'] else 'baseline'
+    exp_tags = []
+    if model_config['use_uncertainty_guide']:
+        exp_tags.append('ug')
+    if model_config['use_boundary_head']:
+        exp_tags.append('bh')
+    exp_name = '_'.join(exp_tags) if exp_tags else 'baseline'
     work_dir = 'results/' + network + '_' + datasets + '_' + exp_name + '_' + datetime.now().strftime('%A_%d_%B_%Y_%Hh_%Mm_%Ss') + '/'
 
     print_interval = 20
