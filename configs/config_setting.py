@@ -15,7 +15,7 @@ class setting_config:
         'c_list': [8,16,24,32,48,64], 
         'bridge': True,
         'gt_ds': True,
-        'use_uncertainty_guide': False,
+        'use_uncertainty_guide': True,
         'use_boundary_head': True,
     }
 
