@@ -50,10 +50,8 @@ class group_aggregation_bridge(nn.Module):
         self.use_uncertainty_guide = use_uncertainty_guide
         self.pre_project = nn.Conv2d(dim_xh, dim_xl, 1)
         group_size = dim_xl // 2
-        chunk_channels = dim_xl // 4
         guide_channels = 2 if use_uncertainty_guide else 1
         group_input_channels = group_size + guide_channels
-        self.guide_proj = nn.Conv2d(guide_channels, chunk_channels, 1)
         self.g0 = nn.Sequential(
             LayerNorm(normalized_shape=group_input_channels, data_format='channels_first'),
             nn.Conv2d(group_input_channels, group_input_channels, kernel_size=3, stride=1, 
@@ -90,26 +88,16 @@ class group_aggregation_bridge(nn.Module):
             return torch.cat((mask_prob, uncertainty), dim=1)
         return torch.sigmoid(mask)
 
-    def _guide_features(self, xh, xl, guide):
-        guide_gate = torch.sigmoid(self.guide_proj(guide))
-        xh = xh * (1 + guide_gate)
-        xl = xl * (1 + guide_gate)
-        return xh, xl
-
     def forward(self, xh, xl, mask):
         xh = self.pre_project(xh)
         xh = F.interpolate(xh, size=[xl.size(2), xl.size(3)], mode ='bilinear', align_corners=True)
         guide = self._build_guide(F.interpolate(mask, size=[xl.size(2), xl.size(3)], mode='bilinear', align_corners=True))
         xh = torch.chunk(xh, 4, dim=1)
         xl = torch.chunk(xl, 4, dim=1)
-        xh0, xl0 = self._guide_features(xh[0], xl[0], guide)
-        xh1, xl1 = self._guide_features(xh[1], xl[1], guide)
-        xh2, xl2 = self._guide_features(xh[2], xl[2], guide)
-        xh3, xl3 = self._guide_features(xh[3], xl[3], guide)
-        x0 = self.g0(torch.cat((xh0, xl0, guide), dim=1))
-        x1 = self.g1(torch.cat((xh1, xl1, guide), dim=1))
-        x2 = self.g2(torch.cat((xh2, xl2, guide), dim=1))
-        x3 = self.g3(torch.cat((xh3, xl3, guide), dim=1))
+        x0 = self.g0(torch.cat((xh[0], xl[0], guide), dim=1))
+        x1 = self.g1(torch.cat((xh[1], xl[1], guide), dim=1))
+        x2 = self.g2(torch.cat((xh[2], xl[2], guide), dim=1))
+        x3 = self.g3(torch.cat((xh[3], xl[3], guide), dim=1))
         x = torch.cat((x0,x1,x2,x3), dim=1)
         x = self.tail_conv(x)
         return x
