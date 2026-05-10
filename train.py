@@ -79,6 +79,7 @@ def main(config):
                         gt_ds=model_cfg['gt_ds'],
                         use_uncertainty_guide=model_cfg.get('use_uncertainty_guide', False),
                         use_boundary_head=model_cfg.get('use_boundary_head', False),
+                        use_boundary_refine=model_cfg.get('use_boundary_refine', False),
                         )
     else: raise Exception('network in not right!')
     model = model.cuda()

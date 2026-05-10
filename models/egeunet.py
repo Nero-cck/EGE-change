@@ -172,13 +172,14 @@ class Grouped_multi_axis_Hadamard_Product_Attention(nn.Module):
 class EGEUNet(nn.Module):
     
     def __init__(self, num_classes=1, input_channels=3, c_list=[8,16,24,32,48,64], bridge=True, gt_ds=True,
-                 use_uncertainty_guide=False, use_boundary_head=False):
+                 use_uncertainty_guide=False, use_boundary_head=False, use_boundary_refine=False):
         super().__init__()
 
         self.bridge = bridge
         self.gt_ds = gt_ds
         self.use_uncertainty_guide = use_uncertainty_guide
         self.use_boundary_head = use_boundary_head
+        self.use_boundary_refine = use_boundary_refine
         
         self.encoder1 = nn.Sequential(
             nn.Conv2d(input_channels, c_list[0], 3, stride=1, padding=1),
@@ -250,6 +251,8 @@ class EGEUNet(nn.Module):
                 nn.Conv2d(c_list[0], 1, 1)
             )
             print('boundary auxiliary head was used')
+            if use_boundary_refine:
+                print('boundary feedback refinement was used')
 
         self.final = nn.Conv2d(c_list[0], num_classes, kernel_size=1)
 
@@ -329,7 +332,15 @@ class EGEUNet(nn.Module):
             gt_pre1 = F.interpolate(gt_pre1, scale_factor=2, mode ='bilinear', align_corners=True)
         else: t1 = self.GAB1(t2, t1)
         out1 = torch.add(out1, t1) # b, c0, H/2, W/2
-        
+
+        edge_pre = None
+        if self.use_boundary_head:
+            edge_logits = self.edge_head(out1)
+            edge_pre = F.interpolate(edge_logits, scale_factor=(2,2), mode='bilinear', align_corners=True)
+            if self.use_boundary_refine:
+                edge_att = torch.sigmoid(edge_logits)
+                out1 = out1 * (1 + edge_att)
+
         out0 = F.interpolate(self.final(out1),scale_factor=(2,2),mode ='bilinear',align_corners=True) # b, num_class, H, W
         outputs = {'out': torch.sigmoid(out0)}
 
@@ -343,7 +354,6 @@ class EGEUNet(nn.Module):
             )
 
         if self.use_boundary_head:
-            edge_pre = F.interpolate(self.edge_head(out1), scale_factor=(2,2), mode='bilinear', align_corners=True)
             outputs['edge'] = torch.sigmoid(edge_pre)
 
         return outputs

@@ -17,6 +17,7 @@ class setting_config:
         'gt_ds': True,
         'use_uncertainty_guide': False,
         'use_boundary_head': True,
+        'use_boundary_refine': True,
     }
 
     datasets = 'isic17' 
@@ -29,7 +30,7 @@ class setting_config:
 
     use_edge_loss = model_config['use_boundary_head']
     lambda_edge = 0.3
-    use_contour_loss = True
+    use_contour_loss = False
     lambda_contour = 0.05
     if use_edge_loss and use_contour_loss:
         criterion = EdgeContourLoss(wb=1, wd=1, lambda_edge=lambda_edge, lambda_contour=lambda_contour)
@@ -59,6 +60,8 @@ class setting_config:
         exp_tags.append('ug')
     if model_config['use_boundary_head']:
         exp_tags.append('bh')
+    if model_config.get('use_boundary_refine', False):
+        exp_tags.append('bfr')
     if use_contour_loss:
         exp_tags.append('cl')
     exp_name = '_'.join(exp_tags) if exp_tags else 'baseline'
