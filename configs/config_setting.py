@@ -15,7 +15,7 @@ class setting_config:
         'c_list': [8,16,24,32,48,64], 
         'bridge': True,
         'gt_ds': True,
-        'use_uncertainty_guide': True,
+        'use_uncertainty_guide': False,
         'use_boundary_head': True,
     }
 
@@ -29,7 +29,14 @@ class setting_config:
 
     use_edge_loss = model_config['use_boundary_head']
     lambda_edge = 0.3
-    criterion = EdgeAwareLoss(wb=1, wd=1, lambda_edge=lambda_edge) if use_edge_loss else GT_BceDiceLoss(wb=1, wd=1)
+    use_contour_loss = True
+    lambda_contour = 0.05
+    if use_edge_loss and use_contour_loss:
+        criterion = EdgeContourLoss(wb=1, wd=1, lambda_edge=lambda_edge, lambda_contour=lambda_contour)
+    elif use_edge_loss:
+        criterion = EdgeAwareLoss(wb=1, wd=1, lambda_edge=lambda_edge)
+    else:
+        criterion = GT_BceDiceLoss(wb=1, wd=1)
 
     pretrained_path = './pre_trained/'
     num_classes = 1
@@ -52,6 +59,8 @@ class setting_config:
         exp_tags.append('ug')
     if model_config['use_boundary_head']:
         exp_tags.append('bh')
+    if use_contour_loss:
+        exp_tags.append('cl')
     exp_name = '_'.join(exp_tags) if exp_tags else 'baseline'
     work_dir = 'results/' + network + '_' + datasets + '_' + exp_name + '_' + datetime.now().strftime('%A_%d_%B_%Y_%Hh_%Mm_%Ss') + '/'
 

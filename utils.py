@@ -344,6 +344,45 @@ class EdgeAwareLoss(nn.Module):
         return seg_loss + self.lambda_edge * edge_loss
 
 
+class ActiveContourLoss(nn.Module):
+    def __init__(self, weight=1.0, eps=1e-8):
+        super(ActiveContourLoss, self).__init__()
+        self.weight = weight
+        self.eps = eps
+
+    def forward(self, pred):
+        delta_r = pred[:, :, 1:, :] - pred[:, :, :-1, :]
+        delta_c = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+        delta_r = delta_r[:, :, :, :-1] ** 2
+        delta_c = delta_c[:, :, :-1, :] ** 2
+        length = torch.mean(torch.sqrt(delta_r + delta_c + self.eps))
+        return self.weight * length
+
+
+class EdgeContourLoss(nn.Module):
+    def __init__(self, wb=1, wd=1, lambda_edge=0.3, lambda_contour=0.05, dilation_ratio=0.02):
+        super(EdgeContourLoss, self).__init__()
+        self.seg_loss = GT_BceDiceLoss(wb, wd)
+        self.edge_loss = BceDiceLoss(wb, wd)
+        self.contour_loss = ActiveContourLoss()
+        self.lambda_edge = lambda_edge
+        self.lambda_contour = lambda_contour
+        self.dilation_ratio = dilation_ratio
+
+    def forward(self, preds, target):
+        seg_loss = self.seg_loss(preds, target)
+
+        edge_term = 0.0
+        edge_pred = preds.get('edge')
+        if edge_pred is not None:
+            edge_target = mask_to_boundary(target, dilation_ratio=self.dilation_ratio)
+            edge_term = self.edge_loss(edge_pred, edge_target)
+
+        contour_term = self.contour_loss(preds['out'])
+
+        return seg_loss + self.lambda_edge * edge_term + self.lambda_contour * contour_term
+
+
 
 class myToTensor:
     def __init__(self):
